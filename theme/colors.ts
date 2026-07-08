@@ -6,7 +6,20 @@
  * are what the app references, so a swap here propagates everywhere.
  */
 
-export const lightColors = {
+export interface ColorTokens {
+  primary: string;
+  primaryDark: string;
+  accent: string;
+  background: string;
+  surface: string;
+  border: string;
+  textPrimary: string;
+  textSecondary: string;
+  success: string;
+  danger: string;
+}
+
+export const lightColors: ColorTokens = {
   primary: '#1E3A8A', // deep royal blue (trust)
   primaryDark: '#172554',
   accent: '#F59E0B', // amber/gold — VIP tags & price highlight
@@ -17,13 +30,13 @@ export const lightColors = {
   textSecondary: '#64748B',
   success: '#16A34A',
   danger: '#DC2626',
-} as const;
+};
 
 /**
  * Dark variant derived from the same brand hues so `userInterfaceStyle:
  * automatic` looks intentional. Tune later alongside the brand swap.
  */
-export const darkColors: typeof lightColors = {
+export const darkColors: ColorTokens = {
   primary: '#3B5BDB',
   primaryDark: '#1E3A8A',
   accent: '#FBBF24',
@@ -35,5 +48,3 @@ export const darkColors: typeof lightColors = {
   success: '#22C55E',
   danger: '#F87171',
 };
-
-export type ColorTokens = typeof lightColors;
