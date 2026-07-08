@@ -1,9 +1,9 @@
 /**
  * VNS App color tokens.
  *
- * These are placeholder "premium" values (deep royal blue + amber/gold).
- * Swap the hex values for the exact brand palette later — the token names
- * are what the app references, so a swap here propagates everywhere.
+ * Purple + gold palette derived from the VIP Number Shop logo.
+ * The token names are what the app references, so a swap here propagates
+ * everywhere.
  */
 
 export interface ColorTokens {
@@ -20,9 +20,9 @@ export interface ColorTokens {
 }
 
 export const lightColors: ColorTokens = {
-  primary: '#1E3A8A', // deep royal blue (trust)
-  primaryDark: '#172554',
-  accent: '#F59E0B', // amber/gold — VIP tags & price highlight
+  primary: '#4A2C6F', // royal purple (brand)
+  primaryDark: '#33204D',
+  accent: '#F4C430', // gold — VIP tags & price highlight
   background: '#FFFFFF',
   surface: '#F8FAFC',
   border: '#E2E8F0',
@@ -37,9 +37,9 @@ export const lightColors: ColorTokens = {
  * automatic` looks intentional. Tune later alongside the brand swap.
  */
 export const darkColors: ColorTokens = {
-  primary: '#3B5BDB',
-  primaryDark: '#1E3A8A',
-  accent: '#FBBF24',
+  primary: '#8B6AD1',
+  primaryDark: '#4A2C6F',
+  accent: '#FBD24E',
   background: '#0B1120',
   surface: '#0F172A',
   border: '#1E293B',
