@@ -2,9 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { specialityTags } from '@/components/NumberCard';
 import { Button, Card, Screen, ThemedText } from '@/components/ui';
-import { formatINR, isComingSoon, parsePrice } from '@/lib/api/format';
+import {
+  discountPercent,
+  formatINR,
+  hasDiscount,
+  parsePrice,
+  patternTags,
+  sellerTier,
+} from '@/lib/api/format';
 import { getNumber } from '@/lib/api/numbers';
 import { analyze } from '@/lib/numerology/engine';
 import { useTheme } from '@/theme';
@@ -20,11 +26,12 @@ export default function NumberDetailScreen() {
   });
 
   const numerology = data ? analyze(data.number) : null;
-  const price = data ? parsePrice(data.unit_price) : 0;
-  const mrp = data ? parsePrice(data.compare_at_price) : 0;
-  const isPremium = data?.seller_type === 'PREMIUM';
-  const tags = data ? specialityTags(data.speciality) : [];
-  const comingSoon = data ? isComingSoon(data) : false;
+  const gstPrice = data ? parsePrice(data.price_with_gst) || parsePrice(data.unit_price) : 0;
+  const basePrice = data ? parsePrice(data.unit_price) : 0;
+  const gst = data ? parsePrice(data.gst_price) : 0;
+  const isPremium = data ? sellerTier(data) === 'premium' : false;
+  const tags = data ? patternTags(data) : [];
+  const showDiscount = data ? hasDiscount(data) : false;
 
   return (
     <Screen>
@@ -40,21 +47,28 @@ export default function NumberDetailScreen() {
             <ThemedText variant="display" tone="primary" style={styles.number}>
               {data.productname?.trim() || data.number}
             </ThemedText>
-            <ThemedText tone="secondary">
-              {isPremium ? '★ Premium' : 'Basic'}
-              {data.rating ? ` · ${data.rating}★` : ''}
-            </ThemedText>
+            <ThemedText tone="secondary">{isPremium ? '★ Premium' : 'Basic'}</ThemedText>
 
             <View style={styles.priceRow}>
               <ThemedText variant="title" tone="accent" weight="bold">
-                {formatINR(price)}
+                {formatINR(gstPrice)}
               </ThemedText>
-              {mrp > price ? (
-                <ThemedText tone="secondary" style={styles.mrp}>
-                  {formatINR(mrp)}
-                </ThemedText>
+              {showDiscount ? (
+                <>
+                  <ThemedText tone="secondary" style={styles.mrp}>
+                    {formatINR(parsePrice(data.compare_at_price))}
+                  </ThemedText>
+                  {discountPercent(data) > 0 ? (
+                    <ThemedText tone="success" variant="label" weight="semibold">
+                      {discountPercent(data)}% off
+                    </ThemedText>
+                  ) : null}
+                </>
               ) : null}
             </View>
+            <ThemedText variant="caption" tone="secondary">
+              incl. GST · base {formatINR(basePrice)} + GST {formatINR(gst)}
+            </ThemedText>
 
             {tags.length ? (
               <View style={styles.tags}>
@@ -69,12 +83,6 @@ export default function NumberDetailScreen() {
                   </View>
                 ))}
               </View>
-            ) : null}
-
-            {comingSoon ? (
-              <ThemedText tone="secondary" style={styles.coming}>
-                {data.comingsoon_date ? `Coming soon · ${data.comingsoon_date}` : 'Coming soon'}
-              </ThemedText>
             ) : null}
           </Card>
 
@@ -99,10 +107,7 @@ export default function NumberDetailScreen() {
             </Card>
           ) : null}
 
-          <Button
-            title={comingSoon ? (data.card_btn_text || 'Pre-book this number') : (data.card_btn_text || 'Buy this number')}
-            variant="accent"
-          />
+          <Button title="Buy this number" variant="accent" />
         </>
       )}
     </Screen>
@@ -129,7 +134,6 @@ const styles = StyleSheet.create({
   mrp: { textDecorationLine: 'line-through' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   tag: { paddingHorizontal: 10, paddingVertical: 4 },
-  coming: { marginTop: 12 },
   numTitle: { marginBottom: 12 },
   row: {
     flexDirection: 'row',

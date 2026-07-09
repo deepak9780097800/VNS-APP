@@ -1,7 +1,14 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/ui';
-import { formatINR, isComingSoon, parsePrice } from '@/lib/api/format';
+import {
+  discountPercent,
+  formatINR,
+  hasDiscount,
+  parsePrice,
+  patternTags,
+  sellerTier,
+} from '@/lib/api/format';
 import type { VipNumber } from '@/lib/api/types';
 import { useTheme } from '@/theme';
 
@@ -10,26 +17,15 @@ export interface NumberCardProps {
   onPress?: (item: VipNumber) => void;
 }
 
-/** Split the backend's comma/pipe-separated speciality string into tags. */
-export function specialityTags(speciality: string | undefined): string[] {
-  if (!speciality) return [];
-  return speciality
-    .split(/[,|/]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-}
-
 export function NumberCard({ item, onPress }: NumberCardProps) {
   const theme = useTheme();
 
-  const price = parsePrice(item.unit_price);
-  const mrp = parsePrice(item.compare_at_price);
-  const discount = mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
-  const isPremium = item.seller_type === 'PREMIUM';
+  const gstPrice = parsePrice(item.price_with_gst) || parsePrice(item.unit_price);
+  const showDiscount = hasDiscount(item);
+  const discount = discountPercent(item);
+  const isPremium = sellerTier(item) === 'premium';
   const isSponsored = item.star_status?.toLowerCase() === 'sponsored';
-  const comingSoon = isComingSoon(item);
-  const tags = specialityTags(item.speciality);
+  const tags = patternTags(item);
   const title = item.productname?.trim() || item.number;
 
   return (
@@ -96,25 +92,24 @@ export function NumberCard({ item, onPress }: NumberCardProps) {
 
       <View style={styles.priceRow}>
         <ThemedText variant="title" tone="accent" weight="bold">
-          {formatINR(price)}
+          {formatINR(gstPrice)}
         </ThemedText>
-        {discount > 0 ? (
+        {showDiscount ? (
           <>
             <ThemedText variant="label" tone="secondary" style={styles.mrp}>
-              {formatINR(mrp)}
+              {formatINR(parsePrice(item.compare_at_price))}
             </ThemedText>
-            <ThemedText variant="label" tone="success" weight="semibold">
-              {discount}% off
-            </ThemedText>
+            {discount > 0 ? (
+              <ThemedText variant="label" tone="success" weight="semibold">
+                {discount}% off
+              </ThemedText>
+            ) : null}
           </>
         ) : null}
       </View>
-
-      {comingSoon ? (
-        <ThemedText variant="caption" tone="secondary" style={styles.coming}>
-          {item.comingsoon_date ? `Coming soon · ${item.comingsoon_date}` : 'Coming soon'}
-        </ThemedText>
-      ) : null}
+      <ThemedText variant="caption" tone="secondary">
+        incl. GST
+      </ThemedText>
     </Pressable>
   );
 }
@@ -154,5 +149,4 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   mrp: { textDecorationLine: 'line-through' },
-  coming: { marginTop: 8 },
 });

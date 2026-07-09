@@ -13,13 +13,13 @@ import {
 
 import { NumberCard } from '@/components/NumberCard';
 import { Screen, ThemedText } from '@/components/ui';
-import { isComingSoon, parsePrice } from '@/lib/api/format';
-import { getCategories, getNumbersByCategory, searchNumbers } from '@/lib/api/numbers';
-import type { Category, SearchNumbersParams } from '@/lib/api/types';
+import { parsePrice, sellerTier } from '@/lib/api/format';
+import { getCategories, getCategoryPage, searchNumbersPage } from '@/lib/api/numbers';
+import type { Category, SearchNumbersParams, VipNumber } from '@/lib/api/types';
 import { useTheme } from '@/theme';
 
 type SellerFilter = 'ALL' | 'PREMIUM' | 'BASIC';
-type SortMode = 'none' | 'price_asc' | 'price_desc' | 'fresh';
+type SortMode = 'none' | 'price_asc' | 'price_desc';
 
 const SELLERS: { key: SellerFilter; label: string }[] = [
   { key: 'ALL', label: 'All' },
@@ -31,10 +31,19 @@ const SORTS: { key: SortMode; label: string }[] = [
   { key: 'none', label: 'Relevance' },
   { key: 'price_asc', label: 'Price ↑' },
   { key: 'price_desc', label: 'Price ↓' },
-  { key: 'fresh', label: 'Available first' },
 ];
 
-const PAGINATE = 60;
+function dedupe(numbers: VipNumber[]): VipNumber[] {
+  const seen = new Set<string>();
+  const out: VipNumber[] = [];
+  for (const n of numbers) {
+    const key = String(n.productid ?? n.number);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(n);
+  }
+  return out;
+}
 
 export default function SearchScreen() {
   const theme = useTheme();
@@ -72,41 +81,39 @@ export default function SearchScreen() {
     [query, seller, minPrice, maxPrice],
   );
 
-  const searchQuery = useQuery({
+  // Search: cursor pagination across tiers (per-tier nextURLs).
+  const searchList = useInfiniteQuery({
     queryKey: ['search', searchParams],
-    queryFn: () => searchNumbers(searchParams),
+    queryFn: ({ pageParam }) => searchNumbersPage(searchParams, pageParam),
+    initialPageParam: undefined as (string | null)[] | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.nextURLs.some(Boolean) ? lastPage.nextURLs : undefined,
     enabled: searchMode,
   });
 
+  // Category browse: cursor pagination via nextURL.
   const categoryList = useInfiniteQuery({
     queryKey: ['category', activeCat?.id],
     queryFn: ({ pageParam }) =>
-      getNumbersByCategory({
-        category: activeCat!.name,
-        id: activeCat!.id,
-        page: pageParam,
-        paginate: PAGINATE,
-      }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, pages) => {
-      const count = lastPage.count ?? 0;
-      const loaded = pages.reduce((n, p) => n + (p.data?.length ?? 0), 0);
-      return loaded < count ? pages.length + 1 : undefined;
-    },
+      getCategoryPage({ category: activeCat!.name, id: activeCat!.id, url: pageParam }),
+    initialPageParam: undefined as string | null | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextURL ?? undefined,
     enabled: !searchMode && !!activeCat,
   });
 
-  const rawItems = useMemo(
-    () =>
-      searchMode
-        ? searchQuery.data ?? []
-        : categoryList.data?.pages.flatMap((p) => p.data ?? []) ?? [],
-    [searchMode, searchQuery.data, categoryList.data],
-  );
+  const rawItems = useMemo(() => {
+    if (searchMode) {
+      return dedupe((searchList.data?.pages ?? []).flatMap((p) => p.data));
+    }
+    return dedupe((categoryList.data?.pages ?? []).flatMap((p) => p.data ?? []));
+  }, [searchMode, searchList.data, categoryList.data]);
 
   const items = useMemo(() => {
     let list = rawItems;
-    if (seller !== 'ALL') list = list.filter((n) => n.seller_type === seller);
+    if (seller !== 'ALL') {
+      const tier = seller.toLowerCase();
+      list = list.filter((n) => sellerTier(n) === tier);
+    }
 
     const min = minPrice ? Number(minPrice) : undefined;
     const max = maxPrice ? Number(maxPrice) : undefined;
@@ -123,14 +130,23 @@ export default function SearchScreen() {
       list = [...list].sort((a, b) => parsePrice(a.unit_price) - parsePrice(b.unit_price));
     } else if (sort === 'price_desc') {
       list = [...list].sort((a, b) => parsePrice(b.unit_price) - parsePrice(a.unit_price));
-    } else if (sort === 'fresh') {
-      list = [...list].sort((a, b) => Number(isComingSoon(a)) - Number(isComingSoon(b)));
     }
     return list;
   }, [rawItems, seller, minPrice, maxPrice, sort]);
 
-  const isLoading = searchMode ? searchQuery.isLoading : categoryList.isLoading;
-  const isError = searchMode ? searchQuery.isError : categoryList.isError;
+  const isLoading = searchMode ? searchList.isLoading : categoryList.isLoading;
+  const isError = searchMode ? searchList.isError : categoryList.isError;
+  const isFetchingNextPage = searchMode
+    ? searchList.isFetchingNextPage
+    : categoryList.isFetchingNextPage;
+
+  function loadMore() {
+    if (searchMode) {
+      if (searchList.hasNextPage && !searchList.isFetchingNextPage) searchList.fetchNextPage();
+    } else if (categoryList.hasNextPage && !categoryList.isFetchingNextPage) {
+      categoryList.fetchNextPage();
+    }
+  }
 
   const inputBg = {
     backgroundColor: theme.colors.surface,
@@ -151,7 +167,6 @@ export default function SearchScreen() {
           style={[styles.input, inputBg]}
         />
 
-        {/* Category chips (browse mode) */}
         {!searchMode ? (
           <ScrollView
             horizontal
@@ -186,7 +201,6 @@ export default function SearchScreen() {
           </ScrollView>
         ) : null}
 
-        {/* Seller + sort */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -237,7 +251,6 @@ export default function SearchScreen() {
           })}
         </ScrollView>
 
-        {/* Price range */}
         <View style={styles.priceRow}>
           <TextInput
             value={minPrice}
@@ -258,7 +271,6 @@ export default function SearchScreen() {
         </View>
       </View>
 
-      {/* Results */}
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={theme.colors.primary} />
@@ -281,13 +293,9 @@ export default function SearchScreen() {
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           onEndReachedThreshold={0.5}
-          onEndReached={() => {
-            if (!searchMode && categoryList.hasNextPage && !categoryList.isFetchingNextPage) {
-              categoryList.fetchNextPage();
-            }
-          }}
+          onEndReached={loadMore}
           ListFooterComponent={
-            categoryList.isFetchingNextPage ? (
+            isFetchingNextPage ? (
               <ActivityIndicator style={styles.footer} color={theme.colors.primary} />
             ) : null
           }

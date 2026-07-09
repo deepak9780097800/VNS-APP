@@ -1,29 +1,46 @@
 /** Shared API domain types — aligned to the fancymobilenumber.in /web backend. */
 
-export type SellerType = 'PREMIUM' | 'BASIC';
+export type SellerTier = 'premium' | 'basic';
 
 /**
  * A catalog number as returned by /web/*\/search and /web/product.
- * Prices arrive as comma-formatted strings (e.g. "24,999"); use parsePrice().
+ * Prices arrive as DECIMAL strings (e.g. "3820.00"); use parsePrice().
+ * seller_type is lowercase ("basic"|"premium") — normalize via sellerTier().
+ * Pattern info lives in `category`/`sub_category` (|##|-separated), not always
+ * in `speciality`. `comingsoon`/`star_status` are NOT availability signals.
  */
 export interface VipNumber {
-  productid: string | number;
-  productname: string;
+  productid: number;
   number: string;
+  productname: string;
+  seller_type: string;
+  seller_status: string;
+  product_status: string;
+  star_status: string;
   unit_price: string;
+  price_with_gst: string;
+  gst_price: string;
   compare_at_price: string;
-  seller_type: SellerType;
-  rating: number;
-  cod: string;
+  discount_expiry: string | null;
   total: number;
   sum: number;
-  speciality: string;
-  star_status: string;
+  rtp: string;
   comingsoon: string;
-  coming_soon: string;
-  comingsoon_date: string;
-  discount_expiry: string;
-  card_btn_text: string;
+  comingsoon_date: string | null;
+  rtp_date: string | null;
+  category: string;
+  sub_category: string;
+  speciality: string;
+  created_at: string;
+  updated_at: string;
+  prefix_2?: string;
+  prefix_3?: string;
+  prefix_4?: string;
+  prefix_5?: string;
+  suffix_2?: string;
+  suffix_3?: string;
+  suffix_4?: string;
+  suffix_5?: string;
 }
 
 /** Server-driven taxonomy from /web/categories. */
@@ -34,12 +51,19 @@ export interface Category {
   sub_categories: unknown[];
 }
 
-/** Standard list wrapper. `nextURL` = cursor (search), `count` = total (offset). */
+/**
+ * Standard list wrapper. Pagination is cursor-based: follow `nextURL`;
+ * `previousURL === null` means first page. `total`/`info` are per-page counts,
+ * NOT a reliable grand total — do not use for offset page math.
+ */
 export interface ListResponse<T> {
+  status: string;
+  message: unknown;
   data: T[];
-  nextURL?: string | null;
-  count?: number;
+  nextURL: string | null;
+  previousURL: string | null;
   total?: number;
+  info?: number;
 }
 
 export interface User {
