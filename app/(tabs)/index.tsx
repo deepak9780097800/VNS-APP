@@ -13,7 +13,7 @@ export default function HomeScreen() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['numbers', 'featured'],
-    queryFn: () => searchNumbers(),
+    queryFn: () => searchNumbers({}),
   });
 
   const featured = (data ?? []).slice(0, 3);
@@ -61,9 +61,9 @@ export default function HomeScreen() {
       ) : (
         featured.map((item) => (
           <NumberCard
-            key={item.id}
+            key={String(item.productid)}
             item={item}
-            onPress={(n) => router.push(`/number/${n.id}`)}
+            onPress={(n) => router.push(`/number/${n.productid}`)}
           />
         ))
       )}
