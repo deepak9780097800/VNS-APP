@@ -43,12 +43,24 @@ export interface VipNumber {
   suffix_5?: string;
 }
 
-/** Server-driven taxonomy from /web/categories. */
+/** A sub-category — its `id` is what /web/categories/search filters on. */
+export interface SubCategory {
+  id: number;
+  name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  detail?: any;
+}
+
+/**
+ * Server-driven taxonomy from /web/categories.
+ * `detail` is a loose/legacy SEO object — do NOT use it for display; use `name`.
+ */
 export interface Category {
   id: string | number;
   name: string;
-  detail: { slug: string; h1_tag: string; sub_heading: string };
-  sub_categories: unknown[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  detail?: any;
+  sub_categories: SubCategory[];
 }
 
 /**

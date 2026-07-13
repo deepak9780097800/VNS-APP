@@ -45,25 +45,31 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 /**
- * GET /web/categories/search — one cursor page of a category's numbers.
- * Pass `url` (a response's nextURL) to advance; omit for the first page.
+ * GET /web/categories/search — one page of a category's numbers.
+ *
+ * The backend keys the listing off `category` = the PARENT category name and
+ * `id` = a SUB-CATEGORY id (a top-level category id returns empty). Pagination
+ * is page-based but embedded in `nextURL`, so we follow `nextURL` (cursor).
+ * `seller` is an optional filter — only sent when the user picks one.
  */
 export async function getCategoryPage(args: {
   category: string;
-  id: string | number;
+  id: number;
   paginate?: number;
+  seller?: string;
   url?: string | null;
 }): Promise<ListResponse<VipNumber>> {
   if (USE_MOCKS) return mockPage(args.url);
-  const url =
-    args.url ??
-    `/web/categories/search?${new URLSearchParams({
+  let url = args.url;
+  if (!url) {
+    const qs = new URLSearchParams({
       category: args.category,
       id: String(args.id),
       paginate: String(args.paginate ?? 60),
-      comingsoon: 'yes',
-      star_status: 'true',
-    })}`;
+    });
+    if (args.seller) qs.append('seller', args.seller);
+    url = `/web/categories/search?${qs}`;
+  }
   return apiFetch<ListResponse<VipNumber>>(url, { skipAuth: true });
 }
 
@@ -198,11 +204,32 @@ const MOCK_NUMBERS: VipNumber[] = [
 ];
 
 const MOCK_CATEGORIES: Category[] = [
-  { id: 'c1', name: 'Sequential Numbers', detail: { slug: 'sequential-numbers', h1_tag: 'Sequential Numbers', sub_heading: 'Numbers in running order' }, sub_categories: [] },
-  { id: 'c2', name: 'Mirror Numbers', detail: { slug: 'mirror-numbers', h1_tag: 'Mirror Numbers', sub_heading: 'Palindrome-style numbers' }, sub_categories: [] },
-  { id: 'c3', name: 'Repeating Numbers', detail: { slug: 'repeating-numbers', h1_tag: 'Repeating Numbers', sub_heading: 'Numbers with repeating digits' }, sub_categories: [] },
-  { id: 'c4', name: '786 Numbers', detail: { slug: '786-numbers', h1_tag: '786 Numbers', sub_heading: 'Auspicious 786 numbers' }, sub_categories: [] },
-  { id: 'c5', name: 'Penta Number', detail: { slug: 'penta-number', h1_tag: 'Penta Numbers', sub_heading: 'Five-of-a-kind numbers' }, sub_categories: [] },
+  {
+    id: 19,
+    name: 'Penta Numbers',
+    sub_categories: [
+      { id: 155, name: 'Penta AAAAA' },
+      { id: 156, name: 'Penta Ending' },
+    ],
+  },
+  {
+    id: 20,
+    name: '786 Numbers',
+    sub_categories: [
+      { id: 201, name: '786 Ending' },
+      { id: 202, name: '786 Repeating' },
+    ],
+  },
+  {
+    id: 21,
+    name: 'Mirror Numbers',
+    sub_categories: [{ id: 301, name: 'Mirror ABAB' }],
+  },
+  {
+    id: 22,
+    name: 'Sequential Numbers',
+    sub_categories: [{ id: 401, name: 'Ascending' }, { id: 402, name: 'Descending' }],
+  },
 ];
 
 function filterMock(params: SearchNumbersParams): VipNumber[] {

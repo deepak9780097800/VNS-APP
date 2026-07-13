@@ -15,7 +15,7 @@ import { NumberCard } from '@/components/NumberCard';
 import { Screen, ThemedText } from '@/components/ui';
 import { parsePrice, sellerTier } from '@/lib/api/format';
 import { getCategories, getCategoryPage, searchNumbersPage } from '@/lib/api/numbers';
-import type { Category, SearchNumbersParams, VipNumber } from '@/lib/api/types';
+import type { Category, SearchNumbersParams, SubCategory, VipNumber } from '@/lib/api/types';
 import { useTheme } from '@/theme';
 
 type SellerFilter = 'ALL' | 'PREMIUM' | 'BASIC';
@@ -50,7 +50,8 @@ export default function SearchScreen() {
   const router = useRouter();
 
   const [query, setQuery] = useState('');
-  const [activeCat, setActiveCat] = useState<Category | null>(null);
+  const [activeParent, setActiveParent] = useState<Category | null>(null);
+  const [activeSub, setActiveSub] = useState<SubCategory | null>(null);
   const [seller, setSeller] = useState<SellerFilter>('ALL');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -64,12 +65,21 @@ export default function SearchScreen() {
     staleTime: 30 * 60 * 1000,
   });
 
-  // Default to the first category so browse mode has content on open.
+  // On load, pick the first parent category so browse mode has content.
   useEffect(() => {
-    if (!searchMode && !activeCat && catsQuery.data?.length) {
-      setActiveCat(catsQuery.data[0]);
+    if (!searchMode && !activeParent && catsQuery.data?.length) {
+      setActiveParent(catsQuery.data[0]);
     }
-  }, [searchMode, activeCat, catsQuery.data]);
+  }, [searchMode, activeParent, catsQuery.data]);
+
+  // When the parent changes, auto-select its first sub-category.
+  useEffect(() => {
+    if (activeParent) {
+      setActiveSub(activeParent.sub_categories?.[0] ?? null);
+    }
+  }, [activeParent]);
+
+  const selectParent = (cat: Category) => setActiveParent(cat);
 
   const searchParams = useMemo<SearchNumbersParams>(
     () => ({
@@ -91,14 +101,19 @@ export default function SearchScreen() {
     enabled: searchMode,
   });
 
-  // Category browse: cursor pagination via nextURL.
+  // Category browse: parent name + sub-category id, cursor pagination via nextURL.
   const categoryList = useInfiniteQuery({
-    queryKey: ['category', activeCat?.id],
+    queryKey: ['category', activeSub?.id, seller],
     queryFn: ({ pageParam }) =>
-      getCategoryPage({ category: activeCat!.name, id: activeCat!.id, url: pageParam }),
+      getCategoryPage({
+        category: activeParent!.name,
+        id: activeSub!.id,
+        seller: seller === 'ALL' ? undefined : seller,
+        url: pageParam,
+      }),
     initialPageParam: undefined as string | null | undefined,
     getNextPageParam: (lastPage) => lastPage.nextURL ?? undefined,
-    enabled: !searchMode && !!activeCat,
+    enabled: !searchMode && !!activeParent && !!activeSub,
   });
 
   const rawItems = useMemo(() => {
@@ -168,37 +183,75 @@ export default function SearchScreen() {
         />
 
         {!searchMode ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}
-          >
-            {catsQuery.data?.map((cat) => {
-              const active = activeCat?.id === cat.id;
-              return (
-                <Pressable
-                  key={String(cat.id)}
-                  onPress={() => setActiveCat(cat)}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: active ? theme.colors.primary : theme.colors.surface,
-                      borderColor: active ? theme.colors.primary : theme.colors.border,
-                      borderRadius: theme.radii.full,
-                    },
-                  ]}
-                >
-                  <ThemedText
-                    variant="label"
-                    tone={active ? 'inverse' : 'secondary'}
-                    weight="medium"
+          <>
+            {/* Parent categories */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipRow}
+            >
+              {catsQuery.data?.map((cat) => {
+                const active = activeParent?.id === cat.id;
+                return (
+                  <Pressable
+                    key={String(cat.id)}
+                    onPress={() => selectParent(cat)}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: active ? theme.colors.primary : theme.colors.surface,
+                        borderColor: active ? theme.colors.primary : theme.colors.border,
+                        borderRadius: theme.radii.full,
+                      },
+                    ]}
                   >
-                    {cat.name}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+                    <ThemedText
+                      variant="label"
+                      tone={active ? 'inverse' : 'secondary'}
+                      weight="medium"
+                    >
+                      {cat.name}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Sub-categories of the active parent */}
+            {activeParent?.sub_categories?.length ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
+              >
+                {activeParent.sub_categories.map((sub) => {
+                  const active = activeSub?.id === sub.id;
+                  return (
+                    <Pressable
+                      key={String(sub.id)}
+                      onPress={() => setActiveSub(sub)}
+                      style={[
+                        styles.miniChip,
+                        {
+                          backgroundColor: active ? theme.colors.accent : theme.colors.surface,
+                          borderColor: active ? theme.colors.accent : theme.colors.border,
+                          borderRadius: theme.radii.full,
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        variant="caption"
+                        tone={active ? 'primary' : 'secondary'}
+                        weight="semibold"
+                      >
+                        {sub.name}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+          </>
         ) : null}
 
         <ScrollView
